@@ -1,0 +1,2022 @@
+import React, { useEffect, useState } from 'react'
+import { api } from './api'
+
+const initialForm = {
+  name: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  acceptTerms: false
+}
+
+const prayerTemplates = [
+  'Gratidão',
+  'Confissão e perdão',
+  'Direção e discernment',
+  'Intercessão',
+  'Paz e fortalecimento'
+]
+
+const fastingDefaults = {
+  startDate: '',
+  endDate: '',
+  durationHours: '24',
+  notes: ''
+}
+
+// Função auxiliar para carregar a sessão salva (Backend)
+function readStoredAuth() {
+  try {
+    const raw = localStorage.getItem('tsd_auth')
+    return raw ? JSON.parse(raw) : { user: null, token: null }
+  } catch {
+    return { user: null, token: null }
+  }
+}
+
+const bibleBooks = [
+  { name: 'Gênesis', chapters: 50 },
+  { name: 'Êxodo', chapters: 40 },
+  { name: 'Levítico', chapters: 27 },
+  { name: 'Números', chapters: 36 },
+  { name: 'Deuteronômio', chapters: 34 },
+  { name: 'Josué', chapters: 24 },
+  { name: 'Juízes', chapters: 21 },
+  { name: 'Rute', chapters: 4 },
+  { name: '1 Samuel', chapters: 31 },
+  { name: '2 Samuel', chapters: 24 },
+  { name: '1 Reis', chapters: 22 },
+  { name: '2 Reis', chapters: 25 },
+  { name: '1 Crônicas', chapters: 29 },
+  { name: '2 Crônicas', chapters: 36 },
+  { name: 'Esdras', chapters: 10 },
+  { name: 'Neemias', chapters: 13 },
+  { name: 'Ester', chapters: 10 },
+  { name: 'Jó', chapters: 42 },
+  { name: 'Salmos', chapters: 150 },
+  { name: 'Provérbios', chapters: 31 },
+  { name: 'Eclesiastes', chapters: 12 },
+  { name: 'Cânticos', chapters: 8 },
+  { name: 'Isaías', chapters: 66 },
+  { name: 'Jeremias', chapters: 52 },
+  { name: 'Lamentações', chapters: 5 },
+  { name: 'Ezequiel', chapters: 48 },
+  { name: 'Daniel', chapters: 12 },
+  { name: 'Oséias', chapters: 14 },
+  { name: 'Joel', chapters: 3 },
+  { name: 'Amós', chapters: 9 },
+  { name: 'Obadias', chapters: 1 },
+  { name: 'Jonas', chapters: 4 },
+  { name: 'Miqueias', chapters: 7 },
+  { name: 'Naum', chapters: 3 },
+  { name: 'Habacuque', chapters: 3 },
+  { name: 'Sofonias', chapters: 3 },
+  { name: 'Ageu', chapters: 2 },
+  { name: 'Zacarias', chapters: 14 },
+  { name: 'Malaquias', chapters: 4 },
+  { name: 'Mateus', chapters: 28 },
+  { name: 'Marcos', chapters: 16 },
+  { name: 'Lucas', chapters: 24 },
+  { name: 'João', chapters: 21 },
+  { name: 'Atos', chapters: 28 },
+  { name: 'Romanos', chapters: 16 },
+  { name: '1 Coríntios', chapters: 16 },
+  { name: '2 Coríntios', chapters: 13 },
+  { name: 'Gálatas', chapters: 6 },
+  { name: 'Efésios', chapters: 6 },
+  { name: 'Filipenses', chapters: 4 },
+  { name: 'Colossenses', chapters: 4 },
+  { name: '1 Tessalonicenses', chapters: 5 },
+  { name: '2 Tessalonicenses', chapters: 3 },
+  { name: '1 Timóteo', chapters: 6 },
+  { name: '2 Timóteo', chapters: 4 },
+  { name: 'Tito', chapters: 3 },
+  { name: 'Filemom', chapters: 1 },
+  { name: 'Hebreus', chapters: 13 },
+  { name: 'Tiago', chapters: 5 },
+  { name: '1 Pedro', chapters: 5 },
+  { name: '2 Pedro', chapters: 3 },
+  { name: '1 João', chapters: 5 },
+  { name: '2 João', chapters: 1 },
+  { name: '3 João', chapters: 1 },
+  { name: 'Judas', chapters: 1 },
+  { name: 'Apocalipse', chapters: 22 }
+]
+
+const quickActions = [
+  { icon: '✝️', label: 'Bíblia', description: 'Ler hoje', type: 'bible' },
+  { icon: '🙏', label: 'Oração', description: 'Iniciar', type: 'prayer' },
+  { icon: '🌾', label: 'Jejum', description: 'Registrar', type: 'fasting' },
+  { icon: '📝', label: 'Devocional', description: 'Escrever', type: 'devotional' },
+  { icon: '🌿', label: 'Jornada', description: 'Acompanhar', type: 'journey' },
+  { icon: '👥', label: 'Grupos', description: 'Acompanhar', type: 'groups' }
+]
+
+function formatDuration(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function formatMinutes(totalSeconds) {
+  const totalMinutes = Math.max(0, Math.round(totalSeconds / 60))
+  return `${totalMinutes} min`
+}
+
+function formatJourneyDate(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit'
+  })
+}
+
+function formatJourneyTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return date.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function buildJourneyData(bibleHistory, prayerHistory, fastingHistory, devotionalHistory) {
+  const totalBibleChapters = bibleBooks.reduce((sum, book) => sum + book.chapters, 0)
+  const uniqueChapterKeys = new Set(bibleHistory.map((entry) => `${entry.book}:${entry.chapter}`))
+  const chaptersRead = uniqueChapterKeys.size
+  const totalPrayerMinutes = prayerHistory.reduce((sum, entry) => sum + Number(entry.duration || 0), 0)
+  const totalFastHours = fastingHistory.reduce((sum, entry) => sum + Number(entry.durationHours || entry.duration_hours || 0), 0)
+  const totalDevotionals = devotionalHistory.length
+  const readingProgress = Math.min(100, Math.round((chaptersRead / totalBibleChapters) * 100))
+
+  const activities = [
+    ...bibleHistory.map((entry) => ({
+      type: 'Leitura',
+      icon: '📖',
+      title: 'Leitura da Bíblia',
+      description: `${entry.book} ${entry.chapter}${entry.verse ? ` • ${entry.verse}` : ''}`,
+      meta: entry.notes || 'Leitura registrada',
+      dateTime: entry.created_at || entry.createdAt,
+      secondary: formatJourneyDate(entry.created_at || entry.createdAt),
+      time: formatJourneyTime(entry.created_at || entry.createdAt)
+    })),
+    ...prayerHistory.map((entry) => ({
+      type: 'Oração',
+      icon: '🙏',
+      title: 'Tempo de Oração',
+      description: `${formatMinutes(entry.duration || 0)}`,
+      meta: entry.focus || 'Momento de oração',
+      dateTime: entry.created_at || entry.createdAt,
+      secondary: formatJourneyDate(entry.created_at || entry.createdAt),
+      time: formatJourneyTime(entry.created_at || entry.createdAt)
+    })),
+    ...fastingHistory.map((entry) => ({
+      type: 'Jejum',
+      icon: '🔥',
+      title: `Jejum de ${entry.durationHours || entry.duration_hours || 0} horas`,
+      description: `${entry.durationHours || entry.duration_hours || 0} horas registradas`,
+      meta: entry.notes || 'Registro do jejum',
+      dateTime: entry.created_at || entry.createdAt,
+      secondary: formatJourneyDate(entry.created_at || entry.createdAt),
+      time: formatJourneyTime(entry.created_at || entry.createdAt)
+    })),
+    ...devotionalHistory.map((entry) => ({
+      type: 'Devocional',
+      icon: '📝',
+      title: entry.title || 'Devocional',
+      description: entry.reference || 'Reflexão diária',
+      meta: (entry.content || '').slice(0, 96) || 'Reflexão registrada',
+      dateTime: entry.created_at || entry.createdAt || entry.date,
+      secondary: formatJourneyDate(entry.created_at || entry.createdAt || entry.date),
+      time: formatJourneyTime(entry.created_at || entry.createdAt || entry.date)
+    }))
+  ].sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime))
+
+  return {
+    summary: {
+      readings: chaptersRead,
+      prayerMinutes: totalPrayerMinutes,
+      fastingHours: totalFastHours,
+      devotionals: totalDevotionals
+    },
+    activities,
+    progress: readingProgress
+  }
+}
+
+export default function App() {
+  const [session, setSession] = useState(readStoredAuth)
+  const [authMode, setAuthMode] = useState('signup')
+  const [form, setForm] = useState(initialForm)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [view, setView] = useState('dashboard')
+  const [prayerSession, setPrayerSession] = useState({ focus: '', note: '', elapsedSeconds: 0, isRunning: false })
+  const [prayerHistory, setPrayerHistory] = useState([])
+  const [prayerFeedback, setPrayerFeedback] = useState('')
+  const [fastingForm, setFastingForm] = useState(fastingDefaults)
+  const [fastingFeedback, setFastingFeedback] = useState('')
+  const [fastingHistory, setFastingHistory] = useState([])
+  const [bibleSelection, setBibleSelection] = useState({ book: 'Salmos', chapter: 23, verse: '', notes: '' })
+  const [bibleHistory, setBibleHistory] = useState([])
+  const [bibleFeedback, setBibleFeedback] = useState('')
+  const [devotionalForm, setDevotionalForm] = useState({ reference: 'Salmos 23:1-6', title: '', content: '', date: new Date().toISOString().slice(0, 10) })
+  const [devotionalHistory, setDevotionalHistory] = useState([])
+  const [devotionalFeedback, setDevotionalFeedback] = useState('')
+  const [devotionalFeedbackType, setDevotionalFeedbackType] = useState('success')
+  const [groups, setGroups] = useState([])
+  const [selectedGroupId, setSelectedGroupId] = useState(null)
+  const [groupForm, setGroupForm] = useState({ name: '', description: '', focus: '', inviteCode: '' })
+  const [joinForm, setJoinForm] = useState({ inviteCode: '' })
+  const [groupFeedback, setGroupFeedback] = useState('')
+  const [groupFeedbackType, setGroupFeedbackType] = useState('success')
+  const [journeyFilter, setJourneyFilter] = useState('Todos')
+  const [journeyPage, setJourneyPage] = useState({ loading: false, error: false, data: buildJourneyData([], [], [], []) })
+
+  // CÁLCULOS DINÂMICOS DA DASHBOARD A PARTIR DO ESTADO REAL
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfWeek = new Date(startOfToday)
+  startOfWeek.setDate(startOfToday.getDate() - 6)
+
+  const isToday = (dateStr) => {
+    if (!dateStr) return false
+    const d = new Date(dateStr)
+    return d >= startOfToday
+  }
+
+  const isThisWeek = (dateStr) => {
+    if (!dateStr) return false
+    const d = new Date(dateStr)
+    return d >= startOfWeek
+  }
+
+  const prayerStats = (() => {
+    const todaySeconds = prayerHistory.reduce((sum, entry) => {
+      const createdAt = new Date(entry.created_at || entry.createdAt)
+      if (createdAt >= startOfToday) {
+        return sum + Number(entry.duration || 0)
+      }
+      return sum
+    }, 0)
+
+    const weekSeconds = prayerHistory.reduce((sum, entry) => {
+      const createdAt = new Date(entry.created_at || entry.createdAt)
+      if (createdAt >= startOfWeek) {
+        return sum + Number(entry.duration || 0)
+      }
+      return sum
+    }, 0)
+
+    return { today: todaySeconds, week: weekSeconds }
+  })()
+
+  // Estatísticas Semanais Dinâmicas
+  const readingDaysThisWeek = new Set(
+    bibleHistory
+      .filter((e) => isThisWeek(e.created_at || e.createdAt))
+      .map((e) => new Date(e.created_at || e.createdAt).toDateString())
+  ).size
+
+  const fastingCountThisWeek = fastingHistory.filter((e) =>
+    isThisWeek(e.created_at || e.createdAt || e.startDate || e.start_date)
+  ).length
+
+  const devotionalCountThisWeek = devotionalHistory.filter((e) =>
+    isThisWeek(e.created_at || e.createdAt || e.date)
+  ).length
+
+  const weeklyStats = [
+    { label: 'Leitura', value: `${readingDaysThisWeek}/7 dias`, accent: 'soft' },
+    { label: 'Oração', value: formatMinutes(prayerStats.week), accent: 'gold' },
+    { label: 'Jejum', value: `${fastingCountThisWeek} ${fastingCountThisWeek === 1 ? 'registro' : 'registros'}`, accent: 'mint' },
+    { label: 'Devocional', value: `${devotionalCountThisWeek} ${devotionalCountThisWeek === 1 ? 'registro' : 'registros'}`, accent: 'warm' }
+  ]
+
+  // Atividades de Hoje Dinâmicas
+  const dailyActivities = [
+    ...bibleHistory.map((entry) => ({
+      time: formatJourneyTime(entry.created_at || entry.createdAt),
+      title: 'Leitura bíblica',
+      description: `${entry.book} ${entry.chapter}${entry.verse ? ` • ${entry.verse}` : ''}`,
+      status: 'Concluído',
+      tone: 'success',
+      dateTime: entry.created_at || entry.createdAt
+    })),
+    ...prayerHistory.map((entry) => ({
+      time: formatJourneyTime(entry.created_at || entry.createdAt),
+      title: 'Oração',
+      description: `${entry.focus || 'Oração'} • ${formatMinutes(entry.duration || 0)}`,
+      status: 'Concluído',
+      tone: 'success',
+      dateTime: entry.created_at || entry.createdAt
+    })),
+    ...fastingHistory.map((entry) => ({
+      time: formatJourneyTime(entry.created_at || entry.createdAt || entry.startDate),
+      title: 'Jejum',
+      description: `${entry.durationHours || entry.duration_hours || 0}h registradas`,
+      status: 'Concluído',
+      tone: 'success',
+      dateTime: entry.created_at || entry.createdAt || entry.startDate
+    })),
+    ...devotionalHistory.map((entry) => ({
+      time: formatJourneyTime(entry.created_at || entry.createdAt || entry.date),
+      title: 'Devocional',
+      description: entry.title || entry.reference || 'Reflexão registrada',
+      status: 'Concluído',
+      tone: 'success',
+      dateTime: entry.created_at || entry.createdAt || entry.date
+    }))
+  ]
+    .filter((act) => isToday(act.dateTime))
+    .sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime))
+
+  // Métricas de Progresso Dinâmicas
+  const totalBibleChapters = bibleBooks.reduce((sum, b) => sum + b.chapters, 0)
+  const uniqueChapterKeys = new Set(bibleHistory.map((entry) => `${entry.book}:${entry.chapter}`))
+  const chaptersRead = uniqueChapterKeys.size
+  const bibleProgressPercent = Math.min(100, Math.round((chaptersRead / totalBibleChapters) * 100))
+
+  const activeDaysThisWeek = new Set([
+    ...bibleHistory.filter((e) => isThisWeek(e.created_at || e.createdAt)).map((e) => new Date(e.created_at || e.createdAt).toDateString()),
+    ...prayerHistory.filter((e) => isThisWeek(e.created_at || e.createdAt)).map((e) => new Date(e.created_at || e.createdAt).toDateString()),
+    ...fastingHistory.filter((e) => isThisWeek(e.created_at || e.createdAt || e.startDate)).map((e) => new Date(e.created_at || e.createdAt || e.startDate).toDateString()),
+    ...devotionalHistory.filter((e) => isThisWeek(e.created_at || e.createdAt || e.date)).map((e) => new Date(e.created_at || e.createdAt || e.date).toDateString())
+  ]).size
+
+  const consistencyPercent = Math.min(100, Math.round((activeDaysThisWeek / 7) * 100))
+  const prayerGoalPercent = Math.min(100, Math.round((prayerStats.week / (70 * 60)) * 100))
+  const fastingGoalPercent = Math.min(100, fastingCountThisWeek > 0 ? Math.min(100, fastingCountThisWeek * 50) : 0)
+
+  const progressMetrics = [
+    { label: 'Leitura da Bíblia', value: bibleProgressPercent },
+    { label: 'Oração', value: prayerGoalPercent },
+    { label: 'Jejum', value: fastingGoalPercent },
+    { label: 'Consistência', value: consistencyPercent }
+  ]
+
+  // Helpers para armazenamento local por usuário (garante persistência de membros quando o backend não mantém)
+  function safeEmailKey(email = '') {
+    return (email || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'guest'
+  }
+
+  function localGroupsKeyFor(email) {
+    return `tsd_groups_${safeEmailKey(email)}`
+  }
+
+  function readLocalGroupsFor(email) {
+    try {
+      const raw = localStorage.getItem(localGroupsKeyFor(email))
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  }
+
+  function writeLocalGroupsFor(email, groupsToWrite) {
+    try {
+      localStorage.setItem(localGroupsKeyFor(email), JSON.stringify(groupsToWrite || []))
+    } catch (e) {
+      // ignore write errors
+    }
+  }
+
+  // Global groups registry (shared on-device) to simulate server-side membership for prototype
+  const GLOBAL_GROUPS_KEY = 'tsd_global_groups'
+
+  function readGlobalGroups() {
+    try {
+      const raw = localStorage.getItem(GLOBAL_GROUPS_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  }
+
+  function writeGlobalGroups(groupsToWrite) {
+    try {
+      localStorage.setItem(GLOBAL_GROUPS_KEY, JSON.stringify(groupsToWrite || []))
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // CARREGAMENTO DOS DADOS DO BACKEND (faz merge com dados locais para members)
+  useEffect(() => {
+    if (!session?.token) {
+      setPrayerHistory([])
+      setFastingHistory([])
+      setBibleHistory([])
+      setDevotionalHistory([])
+      setGroups([])
+      setSelectedGroupId(null)
+      return
+    }
+
+    async function loadData() {
+      const query = `
+        query FetchUserData {
+          bibles { id book chapter verse notes created_at }
+          prayers { id focus note duration created_at }
+          fastings { id start_date end_date duration_hours notes created_at }
+          devotionals { id reference title content date created_at }
+          groups { 
+            id name description focus invite_code progress
+            members { name role }
+          }
+        }
+      `
+
+      try {
+        const res = await api(query, null, session.token)
+
+        const apiGroups = (res && res.data && res.data.groups) ? res.data.groups : []
+        const localGroups = readLocalGroupsFor(session.user?.email)
+        const globalGroups = readGlobalGroups()
+
+        // merge order: apiGroups <- globalGroups (server-simulated) <- localGroups (user overrides)
+        const mergedMap = new Map()
+
+        ;(apiGroups || []).forEach((g) => {
+          mergedMap.set(g.id || (g.invite_code || g.inviteCode), { ...g, members: Array.isArray(g.members) ? g.members : [] })
+        })
+
+        ;(globalGroups || []).forEach((g) => {
+          const key = g.id || (g.invite_code || g.inviteCode)
+          if (mergedMap.has(key)) {
+            const existing = mergedMap.get(key)
+            const members = Array.isArray(existing.members) ? existing.members : []
+            const more = Array.isArray(g.members) ? g.members : []
+            // union by name
+            const union = [...members]
+            more.forEach((m) => { if (!union.some((u) => u.name === m.name)) union.push(m) })
+            mergedMap.set(key, { ...existing, members: union })
+          } else {
+            mergedMap.set(key, { ...g, members: Array.isArray(g.members) ? g.members : [] })
+          }
+        })
+
+        ;(localGroups || []).forEach((g) => {
+          const key = g.id || (g.invite_code || g.inviteCode)
+          if (mergedMap.has(key)) {
+            const existing = mergedMap.get(key)
+            mergedMap.set(key, { ...existing, members: Array.isArray(g.members) ? g.members : existing.members || [] })
+          } else {
+            mergedMap.set(key, { ...g, members: Array.isArray(g.members) ? g.members : [] })
+          }
+        })
+
+        const normalized = Array.from(mergedMap.values()).map((g) => ({ ...g, members: Array.isArray(g.members) ? g.members : [] }))
+
+        if (res && res.data) {
+          setBibleHistory(res.data.bibles || [])
+          setPrayerHistory(res.data.prayers || [])
+          setFastingHistory(res.data.fastings || [])
+          setDevotionalHistory(res.data.devotionals || [])
+        }
+
+        setGroups(normalized)
+        if (normalized.length > 0) setSelectedGroupId(normalized[0].id)
+
+        // persist merged state locally so membership survives logout/login
+        writeLocalGroupsFor(session.user?.email, normalized)
+      } catch (err) {
+        console.error("Erro ao carregar dados", err)
+        // fallback: load local groups only
+        const localOnly = readLocalGroupsFor(session.user?.email)
+        const normalizedLocal = (localOnly || []).map((g) => ({ ...g, members: Array.isArray(g.members) ? g.members : [] }))
+        setGroups(normalizedLocal)
+        if (normalizedLocal.length > 0) setSelectedGroupId(normalizedLocal[0].id)
+      }
+    }
+
+    loadData()
+  }, [session?.token])
+
+  useEffect(() => {
+    if (!prayerSession.isRunning) return undefined
+
+    const timer = window.setInterval(() => {
+      setPrayerSession((current) => ({
+        ...current,
+        elapsedSeconds: current.elapsedSeconds + 1
+      }))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [prayerSession.isRunning])
+
+  useEffect(() => {
+    if (view !== 'journey') return undefined
+
+    const timer = window.setTimeout(() => {
+      try {
+        const data = buildJourneyData(bibleHistory, prayerHistory, fastingHistory, devotionalHistory)
+        setJourneyPage({ loading: false, error: false, data })
+      } catch {
+        setJourneyPage((current) => ({ ...current, loading: false, error: true }))
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [view, bibleHistory, prayerHistory, fastingHistory, devotionalHistory])
+
+  function handleFieldChange(field, value) {
+    setForm((current) => ({ ...current, [field]: value }))
+    if (error) setError('')
+    if (success) setSuccess('')
+  }
+
+  function toggleAuthMode() {
+    setAuthMode((current) => (current === 'signup' ? 'login' : 'signup'))
+    setForm(initialForm)
+    setError('')
+    setSuccess('')
+  }
+
+  function logout() {
+    localStorage.removeItem('tsd_auth')
+    setSession({ user: null, token: null })
+    setForm(initialForm)
+    setAuthMode('login')
+    setError('')
+    setSuccess('')
+    setView('dashboard')
+  }
+
+  function openPrayer() { setView('prayer'); setPrayerFeedback('') }
+  function openBible() { setView('bible'); setBibleFeedback('') }
+  function openFasting() { setView('fasting'); setFastingFeedback('') }
+  function openJourney() { setView('journey'); setJourneyFilter('Todos'); setJourneyPage((current) => ({ ...current, loading: true, error: false })) }
+  function openDevotional() { setView('devotional'); setDevotionalFeedback(''); setDevotionalFeedbackType('success') }
+  function openGroups() { setView('groups'); setGroupFeedback(''); setGroupFeedbackType('success') }
+
+  function closePrayer() { setView('dashboard'); setPrayerFeedback('') }
+  function closeBible() { setView('dashboard'); setBibleFeedback('') }
+  function closeFasting() { setView('dashboard'); setFastingFeedback('') }
+  function closeJourney() { setView('dashboard'); setJourneyPage((current) => ({ ...current, loading: false, error: false })) }
+  function closeDevotional() { setView('dashboard'); setDevotionalFeedback(''); setDevotionalFeedbackType('success') }
+  function closeGroups() { setView('dashboard'); setGroupFeedback(''); setGroupFeedbackType('success') }
+
+  // LOGIN E CADASTRO VIA GRAPHQL
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+    setIsSubmitting(true)
+
+    try {
+      if (authMode === 'signup') {
+        if (!form.name.trim()) throw new Error('Informe seu nome para continuar.')
+        if (form.password !== form.confirmPassword) throw new Error('As senhas precisam coincidir.')
+        if (!form.acceptTerms) throw new Error('Você precisa aceitar os termos para criar a conta.')
+
+        const query = `
+          mutation Register($name: String!, $email: String!, $password: String!) {
+            register(name: $name, email: $email, password: $password) {
+              token
+              user { id name email }
+            }
+          }
+        `
+        const res = await api(query, { name: form.name.trim(), email: form.email.trim(), password: form.password })
+        if (res.errors) throw new Error(res.errors[0].message)
+
+        const authData = res.data.register
+        localStorage.setItem('tsd_auth', JSON.stringify(authData))
+        setSession(authData)
+        setSuccess('Conta criada com sucesso. Seu espaço devocional está pronto.')
+      } else {
+        const query = `
+          mutation Login($email: String!, $password: String!) {
+            login(email: $email, password: $password) {
+              token
+              user { id name email }
+            }
+          }
+        `
+        const res = await api(query, { email: form.email.trim(), password: form.password })
+        if (res.errors) throw new Error(res.errors[0].message)
+
+        const authData = res.data.login
+        localStorage.setItem('tsd_auth', JSON.stringify(authData))
+        setSession(authData)
+        setSuccess('Login realizado com sucesso.')
+      }
+    } catch (err) {
+      setError(err.message || 'Erro ao processar autenticação.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  function startPrayer() { setPrayerSession((current) => ({ ...current, isRunning: true })); setPrayerFeedback('') }
+  function pausePrayer() { setPrayerSession((current) => ({ ...current, isRunning: false })) }
+  function resetPrayer() { setPrayerSession({ focus: '', note: '', elapsedSeconds: 0, isRunning: false }); setPrayerFeedback('') }
+
+  function finishPrayer() {
+    const focus = prayerSession.focus.trim() || prayerTemplates[Math.floor(Math.random() * prayerTemplates.length)]
+    const note = prayerSession.note.trim() || 'O coração buscando a presença de Deus.'
+    const record = {
+      id: Date.now(),
+      focus,
+      note,
+      duration: prayerSession.elapsedSeconds,
+      createdAt: new Date().toISOString()
+    }
+    const nextHistory = [record, ...prayerHistory].slice(0, 5)
+    setPrayerHistory(nextHistory)
+    setPrayerSession({ focus: '', note: '', elapsedSeconds: 0, isRunning: false })
+    setPrayerFeedback('Oração registrada com sucesso.')
+  }
+
+  function handleFastingSave(event) {
+    event.preventDefault()
+    setFastingFeedback('')
+
+    const startDateValue = fastingForm.startDate
+    const endDateValue = fastingForm.endDate || fastingForm.startDate
+    const parsedHours = Number(fastingForm.durationHours)
+
+    if (!startDateValue) {
+      setFastingFeedback('Informe a data de início do jejum.')
+      return
+    }
+
+    const startDate = new Date(`${startDateValue}T00:00:00`)
+    const endDate = new Date(`${endDateValue}T00:00:00`)
+    const durationHours = Number.isFinite(parsedHours) && parsedHours > 0 ? parsedHours : Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60)))
+
+    const record = {
+      id: Date.now(),
+      startDate: startDateValue,
+      endDate: endDateValue,
+      durationHours,
+      notes: fastingForm.notes.trim() || 'Jejum registrado com propósito e paz.',
+      createdAt: new Date().toISOString()
+    }
+
+    const nextHistory = [record, ...fastingHistory].slice(0, 6)
+    setFastingHistory(nextHistory)
+    setFastingForm(fastingDefaults)
+    setFastingFeedback('Jejum registrado com sucesso.')
+  }
+
+  // SALVAR LEITURA BÍBLICA VIA GRAPHQL
+  async function handleBibleSave(event) {
+    event.preventDefault()
+    setBibleFeedback('')
+
+    const selectedBook = bibleBooks.find((book) => book.name === bibleSelection.book) || bibleBooks[0]
+    const chapter = Number(bibleSelection.chapter) || 1
+    const verse = bibleSelection.verse.trim()
+
+    if (!selectedBook || !chapter || chapter > selectedBook.chapters) {
+      setBibleFeedback('Selecione um capítulo válido para continuar.')
+      return
+    }
+
+    const query = `
+      mutation CreateBible($input: BibleInput!) {
+        createBible(bible: $input) {
+          id book chapter verse notes created_at
+        }
+      }
+    `
+    const variables = {
+      input: {
+        book: selectedBook.name,
+        chapter,
+        verse: verse || null,
+        notes: bibleSelection.notes.trim() || 'Leitura registrada com atenção e reverência.'
+      }
+    }
+
+    try {
+      const res = await api(query, variables, session.token)
+      if (res.errors) throw new Error()
+      
+      setBibleHistory((prev) => [res.data.createBible, ...prev].slice(0, 6))
+      setBibleSelection((current) => ({ ...current, verse: '', notes: '' }))
+      setBibleFeedback(`Leitura de ${selectedBook.name} ${chapter} registrada com sucesso.`)
+    } catch (err) {
+      setBibleFeedback('Erro ao salvar registro no servidor.')
+    }
+  }
+
+  function handleDevotionalSave(event) {
+    event.preventDefault()
+    setDevotionalFeedback('')
+    setDevotionalFeedbackType('success')
+
+    const reference = devotionalForm.reference.trim()
+    const title = devotionalForm.title.trim()
+    const content = devotionalForm.content.trim()
+
+    if (!reference || !content) {
+      setDevotionalFeedbackType('error')
+      setDevotionalFeedback('Informe a referência e o conteúdo do devocional.')
+      return
+    }
+
+    const record = {
+      id: Date.now(),
+      reference,
+      title: title || 'Reflexão do dia',
+      content,
+      date: devotionalForm.date,
+      createdAt: new Date().toISOString()
+    }
+
+    const nextHistory = [record, ...devotionalHistory].slice(0, 6)
+    setDevotionalHistory(nextHistory)
+    setDevotionalForm({ reference: 'Salmos 23:1-6', title: '', content: '', date: new Date().toISOString().slice(0, 10) })
+    setDevotionalFeedback('Devocional salvo com sucesso.')
+  }
+
+  // CRIAR GRUPO (Corrigido: Mutation GraphQL sem o campo 'members')
+  async function handleGroupCreate(event) {
+    event.preventDefault()
+    setGroupFeedback('')
+    setGroupFeedbackType('success')
+
+    const name = groupForm.name.trim()
+    const description = groupForm.description.trim()
+    const focus = groupForm.focus.trim() || 'Orar em unidade'
+
+    if (!name) {
+      setGroupFeedbackType('error')
+      setGroupFeedback('Dê um nome ao grupo para continuar.')
+      return
+    }
+
+    const generatedCode = groupForm.inviteCode.trim() || `G-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+
+    const query = `
+      mutation CreateGroup($input: GroupInput!) {
+        createGroup(group: $input) {
+          id name description focus invite_code progress
+        }
+      }
+    `
+
+    try {
+      const res = await api(
+        query, 
+        { 
+          input: { 
+            name, 
+            description: description || 'Grupo de oração e crescimento espiritual.', 
+            focus, 
+            invite_code: generatedCode 
+          } 
+        }, 
+        session.token
+      )
+
+      if (res.errors) throw new Error(res.errors[0].message)
+
+      const createdGroup = res.data?.createGroup || {
+        id: Date.now(),
+        name,
+        description: description || 'Grupo de oração e crescimento espiritual.',
+        focus,
+        invite_code: generatedCode,
+        progress: 0
+      }
+
+      // Adiciona localmente estrutura de membros para interface
+      createdGroup.members = [{ name: session?.user?.name || 'Você', role: 'Líder' }]
+
+      // Update state and persist globally + for this user so membership survives sessions
+      setGroups((prev) => {
+        const next = [createdGroup, ...prev]
+        try { writeLocalGroupsFor(session.user?.email, next) } catch (e) { /* ignore */ }
+        try {
+          const global = readGlobalGroups()
+          const key = createdGroup.id || (createdGroup.invite_code || createdGroup.inviteCode)
+          const exists = global.some((g) => (g.id || g.invite_code || g.inviteCode) === key)
+          const nextGlobal = exists ? global.map((g) => ((g.id || g.invite_code || g.inviteCode) === key ? createdGroup : g)) : [createdGroup, ...global]
+          writeGlobalGroups(nextGlobal)
+        } catch (e) { /* ignore */ }
+        return next
+      })
+
+      setSelectedGroupId(createdGroup.id)
+      setGroupForm({ name: '', description: '', focus: '', inviteCode: '' })
+      setGroupFeedback('Grupo criado com sucesso.')
+    } catch (err) {
+      setGroupFeedbackType('error')
+      setGroupFeedback(err.message || 'Erro ao criar o grupo no servidor.')
+    }
+  }
+
+  // ENTRAR NO GRUPO POR CONVITE (Corrigido: Mutation GraphQL sem o campo 'members')
+  async function handleGroupJoin(event) {
+    event.preventDefault()
+    setGroupFeedback('')
+    setGroupFeedbackType('success')
+
+    const inviteCodeInput = joinForm.inviteCode.trim()
+    if (!inviteCodeInput) {
+      setGroupFeedbackType('error')
+      setGroupFeedback('Informe o código do convite para entrar no grupo.')
+      return
+    }
+
+    const localMatch = groups.find(
+      (group) => (group.invite_code || group.inviteCode || '').toUpperCase() === inviteCodeInput.toUpperCase()
+    )
+
+    const query = `
+      mutation JoinGroup($inviteCode: String!) {
+        joinGroup(inviteCode: $inviteCode) {
+          id name description focus invite_code progress
+        }
+      }
+    `
+
+    try {
+      const res = await api(query, { inviteCode: inviteCodeInput }, session.token)
+      
+      if (res.errors) {
+        if (!localMatch) throw new Error(res.errors[0].message)
+      }
+
+      const targetGroup = res.data?.joinGroup || localMatch
+
+      if (!targetGroup) {
+        throw new Error('Nenhum grupo encontrado para esse convite.')
+      }
+
+      // Ensure the current user is added to the members list and persist locally
+      const memberRecord = { name: session.user?.name || 'Você', role: 'Participante' }
+
+      setGroups((prev) => {
+        const exists = prev.some((g) => g.id === targetGroup.id)
+        let next
+        if (exists) {
+          next = prev.map((g) => {
+            if (g.id !== targetGroup.id) return g
+            const members = Array.isArray(g.members) ? [...g.members] : []
+            const already = members.some((m) => m.name === (memberRecord.name))
+            if (!already) members.push(memberRecord)
+            return { ...g, members }
+          })
+        } else {
+          const newGroup = { ...targetGroup, members: [memberRecord] }
+          next = [newGroup, ...prev]
+        }
+
+        try { writeLocalGroupsFor(session.user?.email, next) } catch (e) { /* ignore */ }
+        try {
+          // update global registry so other users see the updated members on this device
+          const global = readGlobalGroups()
+          const key = targetGroup.id || (targetGroup.invite_code || targetGroup.inviteCode)
+          const nextGlobal = global.map((g) => {
+            const gkey = g.id || (g.invite_code || g.inviteCode)
+            if (gkey !== key) return g
+            const members = Array.isArray(g.members) ? [...g.members] : []
+            if (!members.some((m) => m.name === memberRecord.name)) members.push(memberRecord)
+            return { ...g, members }
+          })
+          // if not found, add
+          if (!nextGlobal.some((g) => (g.id || g.invite_code || g.inviteCode) === key)) {
+            nextGlobal.unshift({ ...targetGroup, members: [memberRecord] })
+          }
+          writeGlobalGroups(nextGlobal)
+        } catch (e) { /* ignore */ }
+        return next
+      })
+
+      setSelectedGroupId(targetGroup.id)
+      setJoinForm({ inviteCode: '' })
+      setGroupFeedback('Você entrou no grupo com sucesso.')
+    } catch (err) {
+      setGroupFeedbackType('error')
+      setGroupFeedback(err.message || 'Nenhum grupo encontrado para esse convite.')
+    }
+  }
+
+  if (!session?.token) {
+    return (
+      <div className="app-shell auth-shell">
+        <div className="auth-card">
+          <div className="auth-header">
+            <span className="brand-mark">TSD</span>
+            <p className="eyebrow">Tempo a Sós com Deus</p>
+          </div>
+
+          <h1>{authMode === 'signup' ? 'Crie sua conta' : 'Acesse sua jornada'}</h1>
+          <p className="subtitle auth-subtitle">
+            {authMode === 'signup'
+              ? 'Comece a acompanhar sua rotina espiritual com calma, foco e propósito.'
+              : 'Volte ao seu momento com Deus e mantenha o ritmo da sua vida devocional.'}
+          </p>
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            {authMode === 'signup' && (
+              <label>
+                <span>Nome</span>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(event) => handleFieldChange('name', event.target.value)}
+                  placeholder="Seu nome"
+                  autoComplete="name"
+                />
+              </label>
+            )}
+
+            <label>
+              <span>E-mail</span>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(event) => handleFieldChange('email', event.target.value)}
+                placeholder="seu@email.com"
+                autoComplete="email"
+              />
+            </label>
+
+            <label>
+              <span>Senha</span>
+              <input
+                type="password"
+                value={form.password}
+                onChange={(event) => handleFieldChange('password', event.target.value)}
+                placeholder={authMode === 'signup' ? 'Mínimo 8 caracteres' : 'Sua senha'}
+                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+              />
+            </label>
+
+            {authMode === 'signup' && (
+              <label>
+                <span>Confirmar senha</span>
+                <input
+                  type="password"
+                  value={form.confirmPassword}
+                  onChange={(event) => handleFieldChange('confirmPassword', event.target.value)}
+                  placeholder="Repita sua senha"
+                  autoComplete="new-password"
+                />
+              </label>
+            )}
+
+            {authMode === 'signup' && (
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={form.acceptTerms}
+                  onChange={(event) => handleFieldChange('acceptTerms', event.target.checked)}
+                />
+                <span>Aceito que meus dados sejam usados apenas para personalizar minha experiência no TSD.</span>
+              </label>
+            )}
+
+            {error && <div className="feedback error">{error}</div>}
+            {success && <div className="feedback success">{success}</div>}
+
+            <button className="primary-button" type="submit" disabled={isSubmitting}>
+              {isSubmitting
+                ? authMode === 'signup'
+                  ? 'Criando conta...'
+                  : 'Entrando...'
+                : authMode === 'signup'
+                  ? 'Criar conta'
+                  : 'Entrar'}
+            </button>
+          </form>
+
+          <button className="text-button auth-toggle" type="button" onClick={toggleAuthMode}>
+            {authMode === 'signup' ? 'Já tenho uma conta' : 'Quero criar uma conta'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'groups') {
+    const selectedGroup = groups.find((group) => group.id === selectedGroupId) || groups[0] || null
+    const participantTotal = groups.reduce((sum, group) => sum + (group.members ? group.members.length : 0), 0)
+
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Grupos</p>
+              <h1>Conexão espiritual</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closeGroups}>
+              Voltar
+            </button>
+          </div>
+        </header>
+
+        <main className="groups-page">
+          <section className="panel groups-intro">
+            <p className="eyebrow">Comunidade</p>
+            <h2>Cresça em unidade, oração e propósito com outras pessoas.</h2>
+          </section>
+
+          <section className="groups-summary panel">
+            <div className="section-header">
+              <h2>Resumo</h2>
+            </div>
+
+            <div className="groups-summary-grid">
+              <article className="group-stat-card">
+                <span className="group-stat-icon">👥</span>
+                <strong>{groups.length}</strong>
+                <small>Grupos</small>
+              </article>
+              <article className="group-stat-card">
+                <span className="group-stat-icon">✨</span>
+                <strong>{participantTotal}</strong>
+                <small>Participantes</small>
+              </article>
+              <article className="group-stat-card">
+                <span className="group-stat-icon">📈</span>
+                <strong>{selectedGroup ? selectedGroup.progress : 0}%</strong>
+                <small>Progresso</small>
+              </article>
+              <article className="group-stat-card">
+                <span className="group-stat-icon">🔐</span>
+                <strong>{selectedGroup ? selectedGroup.inviteCode || selectedGroup.invite_code || '—' : '—'}</strong>
+                <small>Convite</small>
+              </article>
+            </div>
+          </section>
+
+          <section className="groups-layout">
+            <div className="panel groups-panel">
+              <div className="section-header">
+                <h2>Grupos</h2>
+              </div>
+
+              {groups.length === 0 ? (
+                <div className="empty-state small-empty group-empty-state">
+                  <p>Você ainda não está em nenhum grupo.</p>
+                  <small>Crie um grupo novo ou entre em um convite para acompanhar sua jornada em comunidade.</small>
+                </div>
+              ) : (
+                <div className="group-list">
+                  {groups.map((group) => (
+                    <button
+                      key={group.id}
+                      type="button"
+                      className={`group-card ${selectedGroup?.id === group.id ? 'active' : ''}`}
+                      onClick={() => setSelectedGroupId(group.id)}
+                    >
+                      <div className="group-card-header">
+                        <strong>{group.name}</strong>
+                        <span>{group.progress || 0}%</span>
+                      </div>
+                      <p>{group.description}</p>
+                      <small>{group.members ? group.members.length : 0} participantes</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="panel group-side-panel">
+              <div className="section-header">
+                <h2>{selectedGroup ? selectedGroup.name : 'Novo grupo'}</h2>
+              </div>
+
+              {selectedGroup ? (
+                <>
+                  <div className="group-detail-card">
+                    <p className="group-focus">{selectedGroup.focus}</p>
+                    <div className="progress-bar" aria-hidden="true">
+                      <span style={{ width: `${selectedGroup.progress || 0}%` }} />
+                    </div>
+                    <div className="group-meta-row">
+                      <span>Convite</span>
+                      <strong>{selectedGroup.invite_code || selectedGroup.inviteCode || '—'}</strong>
+                    </div>
+                  </div>
+
+                  <div className="group-members">
+                    <h3>Participantes</h3>
+                    {selectedGroup.members && selectedGroup.members.length > 0 ? (
+                      <ul>
+                        {selectedGroup.members.map((member) => (
+                          <li key={`${selectedGroup.id}-${member.name}`} className="member-item">
+                            <span className="member-dot" aria-hidden="true" />
+                            <div>
+                              <strong>{member.name}</strong>
+                              <small>{member.role}</small>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="empty-members">Nenhum detalhe de membro cadastrado no momento.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state small-empty">
+                  <p>Crie seu primeiro grupo.</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="groups-forms">
+            <div className="panel group-form-card">
+              <div className="section-header">
+                <h2>Criar grupo</h2>
+              </div>
+
+              <form className="group-form" onSubmit={handleGroupCreate}>
+                <label className="field-label">
+                  <span>Nome do grupo</span>
+                  <input
+                    type="text"
+                    value={groupForm.name}
+                    onChange={(event) => setGroupForm((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Ex.: Intercessão da manhã"
+                  />
+                </label>
+
+                <label className="field-label">
+                  <span>Objetivo</span>
+                  <input
+                    type="text"
+                    value={groupForm.focus}
+                    onChange={(event) => setGroupForm((current) => ({ ...current, focus: event.target.value }))}
+                    placeholder="Ex.: Orar em unidade e crescer na Palavra"
+                  />
+                </label>
+
+                <label className="field-label">
+                  <span>Descrição</span>
+                  <textarea
+                    rows="4"
+                    value={groupForm.description}
+                    onChange={(event) => setGroupForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Descreva o propósito e como o grupo vai caminhar juntos."
+                  />
+                </label>
+
+                <label className="field-label">
+                  <span>Código do convite</span>
+                  <input
+                    type="text"
+                    value={groupForm.inviteCode}
+                    onChange={(event) => setGroupForm((current) => ({ ...current, inviteCode: event.target.value }))}
+                    placeholder="Opcional. Gera um código automático se vazio."
+                  />
+                </label>
+
+                {groupFeedback && (
+                  <div className={`feedback ${groupFeedbackType === 'error' ? 'error' : 'success'}`}>
+                    {groupFeedback}
+                  </div>
+                )}
+
+                <button type="submit" className="primary-button full-width">
+                  Criar grupo
+                </button>
+              </form>
+            </div>
+
+            <div className="panel group-form-card">
+              <div className="section-header">
+                <h2>Entrar em grupo</h2>
+              </div>
+
+              <form className="group-form" onSubmit={handleGroupJoin}>
+                <label className="field-label">
+                  <span>Código de convite</span>
+                  <input
+                    type="text"
+                    value={joinForm.inviteCode}
+                    onChange={(event) => setJoinForm({ inviteCode: event.target.value })}
+                    placeholder="Ex.: G-AB12CD"
+                  />
+                </label>
+
+                <button type="submit" className="secondary-button full-width">
+                  Entrar no grupo
+                </button>
+              </form>
+            </div>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'journey') {
+    const filters = ['Todos', 'Leitura', 'Oração', 'Jejum', 'Devocional']
+    const journeyItems = journeyFilter === 'Todos'
+      ? journeyPage.data.activities
+      : journeyPage.data.activities.filter((item) => item.type === journeyFilter)
+
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar journey-topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Jornada</p>
+              <h1>Sua Jornada</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closeJourney}>
+              Voltar
+            </button>
+          </div>
+        </header>
+
+        <main className="journey-page">
+          <section className="panel journey-intro">
+            <p className="eyebrow">Seu caminho</p>
+            <h2>Cada pequeno passo com Deus te aproxima do propósito.</h2>
+          </section>
+
+          <section className="journey-summary panel">
+            <div className="section-header">
+              <h2>Resumo da Jornada</h2>
+            </div>
+
+            <div className="journey-summary-grid">
+              <article className="journey-stat-card">
+                <span className="journey-icon">📖</span>
+                <strong>{journeyPage.data.summary.readings}</strong>
+                <small>Leituras</small>
+              </article>
+              <article className="journey-stat-card">
+                <span className="journey-icon">🙏</span>
+                <strong>{journeyPage.data.summary.prayerMinutes}</strong>
+                <small>Min oração</small>
+              </article>
+              <article className="journey-stat-card">
+                <span className="journey-icon">🔥</span>
+                <strong>{journeyPage.data.summary.fastingHours}</strong>
+                <small>Horas jejum</small>
+              </article>
+              <article className="journey-stat-card">
+                <span className="journey-icon">📝</span>
+                <strong>{journeyPage.data.summary.devotionals}</strong>
+                <small>Devocionais</small>
+              </article>
+            </div>
+          </section>
+
+          <section className="panel journey-filters-panel">
+            <div className="journey-filters" role="tablist" aria-label="Filtros da jornada">
+              {filters.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  className={`journey-filter ${journeyFilter === filter ? 'active' : ''}`}
+                  onClick={() => setJourneyFilter(filter)}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel journey-history-panel">
+            <div className="section-header">
+              <h2>Histórico</h2>
+            </div>
+
+            {journeyPage.loading ? (
+              <div className="journey-skeletons" aria-live="polite">
+                {[1, 2, 3].map((item) => (
+                  <div key={item} className="journey-skeleton-item">
+                    <span className="skeleton-icon" />
+                    <div className="skeleton-lines">
+                      <span className="skeleton-line short" />
+                      <span className="skeleton-line medium" />
+                      <span className="skeleton-line long" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : journeyPage.error ? (
+              <div className="empty-state small-empty journey-error-state">
+                <p>Não foi possível carregar sua jornada.</p>
+                <button type="button" className="primary-button" onClick={() => setJourneyPage({ loading: true, error: false, data: buildJourneyData(bibleHistory, prayerHistory, fastingHistory, devotionalHistory) })}>
+                  Tentar novamente
+                </button>
+              </div>
+            ) : journeyItems.length === 0 ? (
+              <div className="empty-state small-empty">
+                <p>Seu caminho ainda está começando.</p>
+                <small>Registre suas primeiras atividades e acompanhe seu crescimento espiritual.</small>
+                <button type="button" className="primary-button" onClick={() => setView('bible')}>
+                  Começar agora
+                </button>
+              </div>
+            ) : (
+              <ul className="journey-list">
+                {journeyItems.map((item) => (
+                  <li key={`${item.type}-${item.dateTime}-${item.title}`} className="journey-item">
+                    <div className="journey-item-icon" aria-hidden="true">{item.icon}</div>
+                    <div className="journey-item-copy">
+                      <div className="journey-item-header">
+                        <span className="journey-item-type">{item.type}</span>
+                        <span className="journey-item-date">{item.secondary}</span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+                      <small>{item.meta}</small>
+                    </div>
+                    <div className="journey-item-time">{item.time}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'bible') {
+    const selectedBook = bibleBooks.find((book) => book.name === bibleSelection.book) || bibleBooks[0]
+    const chapterOptions = Array.from({ length: selectedBook.chapters }, (_, index) => index + 1)
+
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar prayer-topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Bíblia</p>
+              <h1>Leitura do coração</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closeBible}>
+              Voltar
+            </button>
+            <button type="button" className="text-button logout-button" onClick={logout}>
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <main className="bible-layout">
+          <section className="panel bible-main-panel">
+            <div className="section-header">
+              <h2>Livro e capítulo</h2>
+              <span className="status-tag neutral">{selectedBook.name}</span>
+            </div>
+
+            <div className="book-grid">
+              {bibleBooks.map((book) => (
+                <button
+                  key={book.name}
+                  type="button"
+                  className={`book-chip ${bibleSelection.book === book.name ? 'active' : ''}`}
+                  onClick={() => {
+                    setBibleSelection((current) => ({
+                      ...current,
+                      book: book.name,
+                      chapter: Math.min(current.chapter || 1, book.chapters)
+                    }))
+                  }}
+                >
+                  <strong>{book.name}</strong>
+                  <small>{book.chapters} capítulos</small>
+                </button>
+              ))}
+            </div>
+
+            <div className="chapter-picker">
+              {chapterOptions.map((chapter) => (
+                <button
+                  key={chapter}
+                  type="button"
+                  className={`chapter-button ${bibleSelection.chapter === chapter ? 'selected' : ''}`}
+                  onClick={() => setBibleSelection((current) => ({ ...current, chapter }))}
+                >
+                  {chapter}
+                </button>
+              ))}
+            </div>
+
+            <div className="bible-progress-panel">
+              <div className="progress-meta">
+                <span>Progresso da Bíblia</span>
+                <strong>{bibleProgressPercent}%</strong>
+              </div>
+              <div className="progress-bar" aria-hidden="true">
+                <span style={{ width: `${bibleProgressPercent}%` }} />
+              </div>
+            </div>
+
+            <form className="bible-form" onSubmit={handleBibleSave}>
+              <label className="field-label">
+                <span>Versículo</span>
+                <input
+                  type="text"
+                  value={bibleSelection.verse}
+                  onChange={(event) => setBibleSelection((current) => ({ ...current, verse: event.target.value }))}
+                  placeholder="Opcional: ex. 3 ou 23:1-6"
+                />
+              </label>
+
+              <label className="field-label">
+                <span>Observação</span>
+                <textarea
+                  rows="4"
+                  value={bibleSelection.notes}
+                  onChange={(event) => setBibleSelection((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Escreva o que o Senhor te ensinou nesta leitura."
+                />
+              </label>
+
+              {bibleFeedback && <div className="feedback success">{bibleFeedback}</div>}
+
+              <button type="submit" className="primary-button full-width">
+                Registrar leitura
+              </button>
+            </form>
+          </section>
+
+          <aside className="prayer-side">
+            <section className="panel prayer-summary-panel">
+              <div className="section-header">
+                <h2>Resumo</h2>
+              </div>
+
+              <div className="prayer-stats-grid">
+                <article className="stat-card soft">
+                  <span>Capítulos</span>
+                  <strong>{chaptersRead}/{totalBibleChapters}</strong>
+                </article>
+                <article className="stat-card gold">
+                  <span>Completo</span>
+                  <strong>{bibleProgressPercent}%</strong>
+                </article>
+              </div>
+            </section>
+
+            <section className="panel prayer-history-panel">
+              <div className="section-header">
+                <h2>Histórico</h2>
+              </div>
+
+              {bibleHistory.length === 0 ? (
+                <div className="empty-state small-empty">
+                  <p>Ainda não há registros de leitura.</p>
+                </div>
+              ) : (
+                <ul className="prayer-history-list">
+                  {bibleHistory.map((entry) => (
+                    <li key={entry.id} className="prayer-history-item">
+                      <strong>{entry.book} {entry.chapter}</strong>
+                      <span>{entry.verse || 'Versículo não informado'}</span>
+                      <small>{entry.notes}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'prayer') {
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar prayer-topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Oração</p>
+              <h1>Momento com Deus</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closePrayer}>
+              Voltar
+            </button>
+            <button type="button" className="text-button logout-button" onClick={logout}>
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <main className="prayer-layout">
+          <section className="panel prayer-card">
+            <div className="section-header">
+              <h2>Tempo de oração</h2>
+              <span className="status-tag neutral">{prayerSession.isRunning ? 'Em andamento' : 'Preparado'}</span>
+            </div>
+
+            <div className="timer-display">{formatDuration(prayerSession.elapsedSeconds)}</div>
+
+            <div className="prayer-actions">
+              {!prayerSession.isRunning ? (
+                <button type="button" className="primary-button" onClick={startPrayer}>
+                  Iniciar oração
+                </button>
+              ) : (
+                <button type="button" className="secondary-button" onClick={pausePrayer}>
+                  Pausar
+                </button>
+              )}
+              <button type="button" className="ghost-button" onClick={resetPrayer}>
+                Reiniciar
+              </button>
+            </div>
+
+            <label className="field-label">
+              <span>Foco da oração</span>
+              <input
+                type="text"
+                value={prayerSession.focus}
+                onChange={(event) => setPrayerSession((current) => ({ ...current, focus: event.target.value }))}
+                placeholder="Ex.: gratidão, direção, intercessão"
+              />
+            </label>
+
+            <label className="field-label">
+              <span>Notas</span>
+              <textarea
+                value={prayerSession.note}
+                onChange={(event) => setPrayerSession((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Escreva o que você sente no coração, as graças e os pedidos..."
+                rows="4"
+              />
+            </label>
+
+            {prayerFeedback && <div className="feedback success">{prayerFeedback}</div>}
+
+            <button type="button" className="primary-button full-width" onClick={finishPrayer}>
+              Finalizar e registrar
+            </button>
+          </section>
+
+          <aside className="prayer-side">
+            <section className="panel prayer-summary-panel">
+              <div className="section-header">
+                <h2>Estatísticas</h2>
+              </div>
+
+              <div className="prayer-stats-grid">
+                <article className="stat-card soft">
+                  <span>Hoje</span>
+                  <strong>{formatMinutes(prayerStats.today)}</strong>
+                </article>
+                <article className="stat-card gold">
+                  <span>Semanal</span>
+                  <strong>{formatMinutes(prayerStats.week)}</strong>
+                </article>
+              </div>
+            </section>
+
+            <section className="panel prayer-history-panel">
+              <div className="section-header">
+                <h2>Histórico</h2>
+              </div>
+
+              {prayerHistory.length === 0 ? (
+                <div className="empty-state small-empty">
+                  <p>Ainda não há registros de oração.</p>
+                </div>
+              ) : (
+                <ul className="prayer-history-list">
+                  {prayerHistory.map((entry) => (
+                    <li key={entry.id} className="prayer-history-item">
+                      <strong>{entry.focus}</strong>
+                      <span>{formatDuration(entry.duration)}</span>
+                      <small>{entry.note}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'fasting') {
+    const totalHours = fastingHistory.reduce((sum, entry) => sum + Number(entry.durationHours || entry.duration_hours || 0), 0)
+
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar prayer-topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Jejum</p>
+              <h1>Registro espiritual</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closeFasting}>
+              Voltar
+            </button>
+            <button type="button" className="text-button logout-button" onClick={logout}>
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <main className="prayer-layout">
+          <section className="panel prayer-card">
+            <div className="section-header">
+              <h2>Registrar jejum</h2>
+              <span className="status-tag neutral">Foco</span>
+            </div>
+
+            <form onSubmit={handleFastingSave} className="fasting-form">
+              <div className="form-row-two">
+                <label className="field-label">
+                  <span>Início</span>
+                  <input
+                    type="date"
+                    value={fastingForm.startDate}
+                    onChange={(event) => setFastingForm((current) => ({ ...current, startDate: event.target.value }))}
+                  />
+                </label>
+
+                <label className="field-label">
+                  <span>Fim</span>
+                  <input
+                    type="date"
+                    value={fastingForm.endDate}
+                    onChange={(event) => setFastingForm((current) => ({ ...current, endDate: event.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <label className="field-label">
+                <span>Duração (horas)</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={fastingForm.durationHours}
+                  onChange={(event) => setFastingForm((current) => ({ ...current, durationHours: event.target.value }))}
+                />
+              </label>
+
+              <label className="field-label">
+                <span>Observações</span>
+                <textarea
+                  rows="4"
+                  value={fastingForm.notes}
+                  onChange={(event) => setFastingForm((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Descreva o propósito, a intenção e o que o Senhor despertou no seu coração."
+                />
+              </label>
+
+              {fastingFeedback && <div className="feedback success">{fastingFeedback}</div>}
+
+              <button type="submit" className="primary-button full-width">
+                Salvar jejum
+              </button>
+            </form>
+          </section>
+
+          <aside className="prayer-side">
+            <section className="panel prayer-summary-panel">
+              <div className="section-header">
+                <h2>Estatísticas</h2>
+              </div>
+
+              <div className="prayer-stats-grid">
+                <article className="stat-card soft">
+                  <span>Hoje</span>
+                  <strong>{fastingHistory.length > 0 ? `${fastingHistory[0].durationHours || fastingHistory[0].duration_hours}h` : '0h'}</strong>
+                </article>
+                <article className="stat-card gold">
+                  <span>Total</span>
+                  <strong>{Math.round(totalHours)}h</strong>
+                </article>
+              </div>
+            </section>
+
+            <section className="panel prayer-history-panel">
+              <div className="section-header">
+                <h2>Histórico</h2>
+              </div>
+
+              {fastingHistory.length === 0 ? (
+                <div className="empty-state small-empty">
+                  <p>Ainda não há registros de jejum.</p>
+                </div>
+              ) : (
+                <ul className="prayer-history-list">
+                  {fastingHistory.map((entry) => (
+                    <li key={entry.id} className="prayer-history-item">
+                      <strong>{entry.startDate || entry.start_date}</strong>
+                      <span>{entry.durationHours || entry.duration_hours}h</span>
+                      <small>{entry.notes}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+        </main>
+      </div>
+    )
+  }
+
+  if (view === 'devotional') {
+    return (
+      <div className="app-shell dashboard-shell">
+        <header className="topbar prayer-topbar">
+          <div className="brand-block">
+            <span className="brand-mark">TSD</span>
+            <div>
+              <p className="eyebrow">Devocional</p>
+              <h1>Reflexão diária</h1>
+            </div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="ghost-button compact" onClick={closeDevotional}>
+              Voltar
+            </button>
+            <button type="button" className="text-button logout-button" onClick={logout}>
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <main className="devotional-layout">
+          <section className="panel devotional-card">
+            <div className="section-header">
+              <h2>Novo devocional</h2>
+              <span className="status-tag neutral">Pessoal</span>
+            </div>
+
+            <form className="devotional-form" onSubmit={handleDevotionalSave}>
+              <div className="form-row-two">
+                <label className="field-label">
+                  <span>Referência</span>
+                  <input
+                    type="text"
+                    value={devotionalForm.reference}
+                    onChange={(event) => setDevotionalForm((current) => ({ ...current, reference: event.target.value }))}
+                    placeholder="Ex.: Salmos 23:1-6"
+                  />
+                </label>
+
+                <label className="field-label">
+                  <span>Data</span>
+                  <input
+                    type="date"
+                    value={devotionalForm.date}
+                    onChange={(event) => setDevotionalForm((current) => ({ ...current, date: event.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <label className="field-label">
+                <span>Título</span>
+                <input
+                  type="text"
+                  value={devotionalForm.title}
+                  onChange={(event) => setDevotionalForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="Dê um título para esta reflexão"
+                />
+              </label>
+
+              <label className="field-label">
+                <span>Conteúdo</span>
+                <textarea
+                  rows="7"
+                  value={devotionalForm.content}
+                  onChange={(event) => setDevotionalForm((current) => ({ ...current, content: event.target.value }))}
+                  placeholder="Escreva o que o Senhor te ensinou, o que você aprendeu ou a oração que brotou neste momento."
+                />
+              </label>
+
+              {devotionalFeedback && (
+                <div className={`feedback ${devotionalFeedbackType === 'error' ? 'error' : 'success'}`}>
+                  {devotionalFeedback}
+                </div>
+              )}
+
+              <button type="submit" className="primary-button full-width">
+                Salvar devocional
+              </button>
+            </form>
+          </section>
+
+          <aside className="prayer-side">
+            <section className="panel prayer-summary-panel">
+              <div className="section-header">
+                <h2>Resumo</h2>
+              </div>
+
+              <div className="prayer-stats-grid">
+                <article className="stat-card soft">
+                  <span>Hoje</span>
+                  <strong>{devotionalHistory.filter((entry) => isToday(entry.createdAt || entry.created_at || entry.date)).length}</strong>
+                </article>
+                <article className="stat-card gold">
+                  <span>Total</span>
+                  <strong>{devotionalHistory.length}</strong>
+                </article>
+              </div>
+            </section>
+
+            <section className="panel prayer-history-panel">
+              <div className="section-header">
+                <h2>Histórico</h2>
+              </div>
+
+              {devotionalHistory.length === 0 ? (
+                <div className="empty-state small-empty">
+                  <p>Ainda não há devocionais registrados.</p>
+                </div>
+              ) : (
+                <ul className="prayer-history-list">
+                  {devotionalHistory.map((entry) => (
+                    <li key={entry.id} className="prayer-history-item">
+                      <strong>{entry.title}</strong>
+                      <span>{entry.reference}</span>
+                      <small>{entry.content}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="app-shell dashboard-shell">
+      <header className="topbar">
+        <div className="brand-block">
+          <span className="brand-mark">TSD</span>
+          <div>
+            <p className="eyebrow">Tempo a Sós com Deus</p>
+            <h1>Bom dia, {session.user?.name?.split(' ')[0] || 'irmão'}</h1>
+          </div>
+        </div>
+
+        <div className="topbar-actions">
+          <button type="button" className="ghost-button compact">
+            Hoje
+          </button>
+          <button type="button" className="text-button logout-button" onClick={logout}>
+            Sair
+          </button>
+        </div>
+      </header>
+
+      <main className="dashboard">
+        <section className="hero panel">
+          <div className="hero-copy">
+            <p className="eyebrow">Seu momento</p>
+            <h2>Que a paz do Senhor seja o centro do seu dia.</h2>
+            <p className="subtitle">
+              Acompanhe sua leitura, oração e os hábitos que te ajudam a permanecer firme em Cristo.
+            </p>
+            <div className="hero-actions">
+              <button type="button" className="primary-button" onClick={openBible}>
+                Registrar leitura
+              </button>
+              <button type="button" className="secondary-button" onClick={openPrayer}>
+                Iniciar oração
+              </button>
+            </div>
+          </div>
+
+          <div className="hero-summary">
+            <div 
+              className="radial-progress" 
+              style={{ '--progress': `${consistencyPercent}%` }} 
+              aria-label="Consistência semanal"
+            >
+              <div className="ring">
+                <span>{consistencyPercent}%</span>
+              </div>
+            </div>
+            <div className="summary-meta">
+              <strong>Consistência Semanal</strong>
+              <p>{consistencyPercent > 0 ? 'Mantenha o ritmo do seu tempo a sós.' : 'Registre suas práticas para iniciar.'}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="stats-grid" aria-label="Resumo da semana">
+          {weeklyStats.map((item) => (
+            <article key={item.label} className={`stat-card ${item.accent}`}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
+        </section>
+
+        <section className="panel">
+          <div className="section-header">
+            <h2>Atividades de hoje</h2>
+            <button type="button" className="text-button" onClick={openJourney}>
+              Ver jornada
+            </button>
+          </div>
+
+          {dailyActivities.length === 0 ? (
+            <div className="empty-state small-empty">
+              <p>Nenhuma atividade registrada hoje.</p>
+              <small>Escolha uma prática abaixo para começar o seu momento com Deus.</small>
+            </div>
+          ) : (
+            <ul className="activity-list">
+              {dailyActivities.map((activity, index) => (
+                <li key={`${activity.title}-${index}`} className="activity-item">
+                  <div className="activity-time">{activity.time}</div>
+                  <div className="activity-text">
+                    <h3>{activity.title}</h3>
+                    <p>{activity.description}</p>
+                  </div>
+                  <span className={`status-tag ${activity.tone}`}>{activity.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="content-grid">
+          <article className="panel">
+            <div className="section-header">
+              <h2>Progresso</h2>
+            </div>
+
+            <div className="progress-list">
+              {progressMetrics.map((metric) => (
+                <div key={metric.label} className="progress-item">
+                  <div className="progress-meta">
+                    <span>{metric.label}</span>
+                    <strong>{metric.value}%</strong>
+                  </div>
+                  <div className="progress-bar" aria-hidden="true">
+                    <span style={{ width: `${metric.value}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="section-header">
+              <h2>Práticas</h2>
+              <button type="button" className="text-button" onClick={openJourney}>
+                Acessar
+              </button>
+            </div>
+
+            <div className="practice-grid">
+              {quickActions.map((action) => (
+                <button
+                  type="button"
+                  key={action.label}
+                  className={`practice-card ${action.type}`}
+                  onClick={() => {
+                    if (action.label === 'Bíblia') openBible()
+                    if (action.label === 'Oração') openPrayer()
+                    if (action.label === 'Jejum') openFasting()
+                    if (action.label === 'Devocional') openDevotional()
+                    if (action.label === 'Jornada') openJourney()
+                    if (action.label === 'Grupos') openGroups()
+                  }}
+                >
+                  <span className="practice-icon" aria-hidden="true">{action.icon}</span>
+                  <span className="practice-label">{action.label}</span>
+                  <small>{action.description}</small>
+                </button>
+              ))}
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  )
+}
